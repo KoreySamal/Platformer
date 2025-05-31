@@ -1,5 +1,7 @@
 #include <SDL2/SDL_error.h>
+#include <SDL2/SDL_image.h>
 #include <SDL2/SDL_keycode.h>
+#include <SDL2/SDL_rect.h>
 #include <SDL2/SDL_render.h>
 #include <SDL2/SDL_video.h>
 #include <box2d/collision.h>
@@ -29,6 +31,8 @@ struct Player {
     float radius;
     int direction;
     b2BodyId bodyid;
+    SDL_Texture* texture;
+    int jump;
 };
 
 struct Platform {
@@ -61,7 +65,19 @@ void Render() {
     SDL_RenderClear(renderer);
     SDL_SetRenderDrawColor(renderer, 2, 2, 2, 1);
     b2Vec2 player_position = b2Body_GetPosition(game.player.bodyid);
-    Draw_circle(player_position.x, SCREEN_HEIGHT - player_position.y, game.player.radius);
+    b2Rot player_rotation = b2Body_GetRotation(game.player.bodyid);
+    float player_angle = - 180 / M_PI * b2Rot_GetAngle(player_rotation);
+    SDL_Rect player_rect = {
+        .x = player_position.x - game.player.radius,
+        .y = SCREEN_HEIGHT - (player_position.y + game.player.radius),
+        .w = game.player.radius * 2.0,
+        .h = game.player.radius * 2.0,
+    };
+    SDL_Point player_center = {
+        .x = game.player.radius,
+        .y = game.player.radius,
+    };
+    SDL_RenderCopyEx(renderer, game.player.texture, NULL, &player_rect, player_angle, &player_center, SDL_FLIP_NONE);
     for(int i = 0; i < game.platforms_count; i++) {
         b2Vec2 platform_position = b2Body_GetPosition(game.platforms[i].bodyid);
         SDL_FRect rect = {
@@ -95,8 +111,17 @@ void Handle_events() {
             game.state = EXIT;
         }
         if(event.type == SDL_KEYDOWN && !event.key.repeat) {
-            switch (event.key.keysym.sym) {
+            switch(event.key.keysym.sym) {
                 case SDLK_ESCAPE: game.state = EXIT; break;
+                case SDLK_a: game.player.direction++; break;
+                case SDLK_d: game.player.direction--; break;
+                case SDLK_SPACE: game.player.jump = 1; break;
+            }
+        }
+        if(event.type == SDL_KEYUP && !event.key.repeat) {
+            switch(event.key.keysym.sym) {
+                case SDLK_a: game.player.direction--; break;
+                case SDLK_d: game.player.direction++; break;
             }
         }
     }
@@ -123,25 +148,38 @@ int main(int argc, char* argv[]) {
     Init();
 
     b2WorldDef worlddef = b2DefaultWorldDef();
-    worlddef.gravity = (b2Vec2){0.0f, -25.0f};
+    worlddef.gravity = (b2Vec2){0.0f, -100.0f};
     game.worldid = b2CreateWorld(&worlddef);
 
 
-    game.platforms_count = 2;
+    game.platforms_count = 7;
     game.platforms = malloc(sizeof(struct Platform) * game.platforms_count);
     game.platforms[0] = create_platform(500, 25, 1000, 50);
     game.platforms[1] = create_platform(200, 300, 200, 50);
+    game.platforms[2] = create_platform(25, 400, 50, 800);
+    game.platforms[3] = create_platform(975, 400, 50, 800);
+    game.platforms[4] = create_platform(500, 150, 200, 50);
+    game.platforms[5] = create_platform(400, 200, 70, 30);
+    game.platforms[6] = create_platform(750, 100, 70, 30);
 
-    game.player.radius = 20;
+    game.player.radius = 32;
+    SDL_Surface* sprite = IMG_Load("player.png");
+    game.player.texture = SDL_CreateTextureFromSurface(renderer, sprite);
     b2BodyDef bodyDef = b2DefaultBodyDef();
     bodyDef.type = b2_dynamicBody;
-    bodyDef.position = (b2Vec2){SCREEN_WIDTH / 2.0, SCREEN_HEIGHT / 2.0};
+    bodyDef.position = (b2Vec2){100, 100};
     game.player.bodyid = b2CreateBody(game.worldid, &bodyDef);
-    b2Polygon dynamic_box = b2MakeBox(game.player.radius, game.player.radius);
+    b2Circle circle = {
+        .center = {
+            .x = 0,
+            .y = 0,
+        },
+        .radius = game.player.radius,
+    };
     b2ShapeDef shape = b2DefaultShapeDef();
     shape.density = 1.0;
-    shape.material.friction = 0.3f;
-    b2CreatePolygonShape(game.player.bodyid, &shape, &dynamic_box);
+    shape.material.friction = 15.0f;
+    b2CreateCircleShape(game.player.bodyid, &shape, &circle);
 
     game.state = RUNNING;
     float time_step = TARGET_FRAME_TIME / 1000.0;
@@ -149,6 +187,17 @@ int main(int argc, char* argv[]) {
     while(game.state == RUNNING) {
         Uint32 start_time = SDL_GetTicks();
         Handle_events();
+        if(game.player.jump) {
+            b2Vec2 player_velocity = b2Body_GetLinearVelocity(game.player.bodyid);
+            if(fabsf(player_velocity.y) < 10) {
+                player_velocity.y += 100;
+                b2Body_SetLinearVelocity(game.player.bodyid, player_velocity);
+            }
+            game.player.jump = 0;
+        }
+        float angular_velocity = b2Body_GetAngularVelocity(game.player.bodyid);
+        angular_velocity += 1 * game.player.direction;
+        b2Body_SetAngularVelocity(game.player.bodyid, angular_velocity);
         b2World_Step(game.worldid, time_step, substep_count);
         Render();
         Uint32 end_time = SDL_GetTicks();
