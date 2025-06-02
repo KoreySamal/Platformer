@@ -41,12 +41,17 @@ struct Platform {
     b2BodyId bodyid;
 };
 
+struct Camera {
+    b2Vec2 position;
+};
+
 struct Game {
+    int platforms_count;
     enum State state;
     struct Player player;
     struct Platform* platforms;
-    int platforms_count;
     b2WorldId worldid;
+    struct Camera camera;
 } game;
 
 void Draw_circle(float x_center, float y_center, float radius) {
@@ -60,16 +65,23 @@ void Draw_circle(float x_center, float y_center, float radius) {
     }
 }
 
+b2Vec2 Transform_coordinates(b2Vec2 vec) {
+    vec.y = SCREEN_HEIGHT - vec.y;
+    vec.x -= game.camera.position.x - SCREEN_WIDTH / 2.0;
+    vec.y += game.camera.position.y - SCREEN_HEIGHT / 2.0;
+    return vec;
+}
+
 void Render() {
     SDL_SetRenderDrawColor(renderer, 200, 200, 200, 1);
     SDL_RenderClear(renderer);
     SDL_SetRenderDrawColor(renderer, 2, 2, 2, 1);
-    b2Vec2 player_position = b2Body_GetPosition(game.player.bodyid);
+    b2Vec2 player_position = Transform_coordinates(b2Body_GetPosition(game.player.bodyid));
     b2Rot player_rotation = b2Body_GetRotation(game.player.bodyid);
     float player_angle = - 180 / M_PI * b2Rot_GetAngle(player_rotation);
     SDL_Rect player_rect = {
         .x = player_position.x - game.player.radius,
-        .y = SCREEN_HEIGHT - (player_position.y + game.player.radius),
+        .y = player_position.y - game.player.radius,
         .w = game.player.radius * 2.0,
         .h = game.player.radius * 2.0,
     };
@@ -79,10 +91,10 @@ void Render() {
     };
     SDL_RenderCopyEx(renderer, game.player.texture, NULL, &player_rect, player_angle, &player_center, SDL_FLIP_NONE);
     for(int i = 0; i < game.platforms_count; i++) {
-        b2Vec2 platform_position = b2Body_GetPosition(game.platforms[i].bodyid);
+        b2Vec2 platform_position = Transform_coordinates(b2Body_GetPosition(game.platforms[i].bodyid));
         SDL_FRect rect = {
             .x = platform_position.x - game.platforms[i].width / 2,
-            .y = SCREEN_HEIGHT - (platform_position.y + game.platforms[i].height / 2),
+            .y = platform_position.y - game.platforms[i].height / 2,
             .w = game.platforms[i].width,
             .h = game.platforms[i].height,
         };
@@ -199,6 +211,10 @@ int main(int argc, char* argv[]) {
         angular_velocity += 1 * game.player.direction;
         b2Body_SetAngularVelocity(game.player.bodyid, angular_velocity);
         b2World_Step(game.worldid, time_step, substep_count);
+        game.camera.position = b2Body_GetPosition(game.player.bodyid);
+        if(game.camera.position.y <= SCREEN_HEIGHT / 2.0) {
+            game.camera.position.y = SCREEN_HEIGHT / 2.0;
+        }
         Render();
         Uint32 end_time = SDL_GetTicks();
         Uint32 frame_time = end_time - start_time;
