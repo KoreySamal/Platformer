@@ -195,7 +195,7 @@ int main(int argc, char* argv[]) {
     };
     b2ShapeDef shape = b2DefaultShapeDef();
     shape.density = 1.0;
-    shape.material.friction = 15.0f;
+    shape.material.friction = 0.5f;
     b2CreateCircleShape(game.player.bodyid, &shape, &circle);
 
     game.state = RUNNING;
@@ -204,21 +204,19 @@ int main(int argc, char* argv[]) {
     while(game.state == RUNNING) {
         Uint32 start_time = SDL_GetTicks();
         Handle_events();
+        b2Vec2 player_velocity = b2Body_GetLinearVelocity(game.player.bodyid);
         if(game.player.jump) {
             b2RayResult ray = b2World_CastRayClosest(game.worldid, b2Body_GetPosition(game.player.bodyid),(b2Vec2){0, - game.player.radius - 1}, (b2QueryFilter){0x0001, 0xffff});
             if(ray.hit) {
-                b2Vec2 player_velocity = b2Body_GetLinearVelocity(game.player.bodyid);
                 player_velocity.y += 250;
-                b2Body_SetLinearVelocity(game.player.bodyid, player_velocity);
             }
             game.player.jump = 0;
         }
         if(b2Body_GetPosition(game.player.bodyid).y < 0) {
             break;
         }
-        float angular_velocity = b2Body_GetAngularVelocity(game.player.bodyid);
-        angular_velocity += 1 * game.player.direction;
-        b2Body_SetAngularVelocity(game.player.bodyid, angular_velocity);
+        player_velocity.x -= 8 * game.player.direction;
+        b2Body_SetLinearVelocity(game.player.bodyid, player_velocity);
         b2World_Step(game.worldid, time_step, substep_count);
         game.camera.position = b2Body_GetPosition(game.player.bodyid);
         if(game.camera.position.y <= SCREEN_HEIGHT / 2.0) {
