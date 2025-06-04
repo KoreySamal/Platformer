@@ -160,26 +160,31 @@ int main(int argc, char* argv[]) {
     Init();
 
     b2WorldDef worlddef = b2DefaultWorldDef();
-    worlddef.gravity = (b2Vec2){0.0f, -100.0f};
+    worlddef.gravity = (b2Vec2){0.0f, -200.0f};
     game.worldid = b2CreateWorld(&worlddef);
 
 
-    game.platforms_count = 7;
+    game.platforms_count = 12;
     game.platforms = malloc(sizeof(struct Platform) * game.platforms_count);
-    game.platforms[0] = create_platform(500, 25, 1000, 50);
-    game.platforms[1] = create_platform(200, 300, 200, 50);
-    game.platforms[2] = create_platform(25, 400, 50, 800);
-    game.platforms[3] = create_platform(975, 400, 50, 800);
-    game.platforms[4] = create_platform(500, 150, 200, 50);
-    game.platforms[5] = create_platform(400, 200, 70, 30);
-    game.platforms[6] = create_platform(750, 100, 70, 30);
+    game.platforms[0] = create_platform(1500, 25, 3000, 50);
+    game.platforms[1] = create_platform(0, 200, 100, 50);
+    game.platforms[2] = create_platform(300, 450, 100, 50);
+    game.platforms[3] = create_platform(500, 300, 100, 50);
+    game.platforms[4] = create_platform(700, 150, 100, 50);
+    game.platforms[5] = create_platform(900, 300, 100, 50);
+    game.platforms[6] = create_platform(1550, 450, 1000, 50);
+    game.platforms[7] = create_platform(1750, 775, 50, 400);
+    game.platforms[8] = create_platform(2050, 625, 50, 400);
+    game.platforms[9] = create_platform(2000, 600, 70, 50);
+    game.platforms[10] = create_platform(1800, 700, 70, 50);
+    game.platforms[11] = create_platform(2300, 700, 200, 50);
 
     game.player.radius = 32;
     SDL_Surface* sprite = IMG_Load("player.png");
     game.player.texture = SDL_CreateTextureFromSurface(renderer, sprite);
     b2BodyDef bodyDef = b2DefaultBodyDef();
     bodyDef.type = b2_dynamicBody;
-    bodyDef.position = (b2Vec2){100, 100};
+    bodyDef.position = (b2Vec2){10, 300};
     game.player.bodyid = b2CreateBody(game.worldid, &bodyDef);
     b2Circle circle = {
         .center = {
@@ -200,12 +205,16 @@ int main(int argc, char* argv[]) {
         Uint32 start_time = SDL_GetTicks();
         Handle_events();
         if(game.player.jump) {
-            b2Vec2 player_velocity = b2Body_GetLinearVelocity(game.player.bodyid);
-            if(fabsf(player_velocity.y) < 10) {
-                player_velocity.y += 100;
+            b2RayResult ray = b2World_CastRayClosest(game.worldid, b2Body_GetPosition(game.player.bodyid),(b2Vec2){0, - game.player.radius - 1}, (b2QueryFilter){0x0001, 0xffff});
+            if(ray.hit) {
+                b2Vec2 player_velocity = b2Body_GetLinearVelocity(game.player.bodyid);
+                player_velocity.y += 250;
                 b2Body_SetLinearVelocity(game.player.bodyid, player_velocity);
             }
             game.player.jump = 0;
+        }
+        if(b2Body_GetPosition(game.player.bodyid).y < 0) {
+            break;
         }
         float angular_velocity = b2Body_GetAngularVelocity(game.player.bodyid);
         angular_velocity += 1 * game.player.direction;
